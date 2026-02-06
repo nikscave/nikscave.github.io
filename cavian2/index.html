@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cavian2 UI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            color: #fff;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(100, 200, 255, 0.5);
+            animation: fadeInDown 0.8s ease-out;
+        }
+        .subtitle {
+            font-size: 1.1rem;
+            color: #a0a0a0;
+            margin-bottom: 40px;
+            animation: fadeIn 1s ease-out 0.3s both;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            width: 100%;
+            animation: fadeInUp 0.8s ease-out 0.5s both;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 25px;
+            text-decoration: none;
+            color: #fff;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        .card:hover {
+            transform: translateY(-5px) scale(1.02);
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(100, 200, 255, 0.3);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3), 0 0 30px rgba(100, 200, 255, 0.1);
+        }
+        .card h2 {
+            font-size: 1.3rem;
+            margin-bottom: 8px;
+            color: #64c8ff;
+        }
+        .card p {
+            font-size: 0.9rem;
+            color: #888;
+        }
+        .icon {
+            font-size: 2rem;
+            margin-bottom: 15px;
+        }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Cavian2 UI</h1>
+    <p class="subtitle">Interactive modular interface for Cavian2</p>
+
+    <div class="grid">
+        <a href="cavianUI-v2.html" class="card">
+            <div class="icon">🎛️</div>
+            <h2>Cavian UI v2</h2>
+            <p>Refactored modular interface with all features</p>
+        </a>
+        <a href="preview.html" class="card">
+            <div class="icon">👁️</div>
+            <h2>Preview</h2>
+            <p>Live preview mode</p>
+        </a>
+        <a href="config.html" class="card">
+            <div class="icon">⚙️</div>
+            <h2>Configuration</h2>
+            <p>Settings and preferences</p>
+        </a>
+        <a href="upload.html" class="card">
+            <div class="icon">📤</div>
+            <h2>Upload</h2>
+            <p>Upload files to device</p>
+        </a>
+        <a href="cavianUI.html" class="card">
+            <div class="icon">🎛️</div>
+            <h2>Cavian UI (Legacy)</h2>
+            <p>Original interface version</p>
+        </a>
+        <a href="README.md" class="card">
+            <div class="icon">📖</div>
+            <h2>Documentation</h2>
+            <p>Readme and guides</p>
+        </a>
+    </div>
+</body>
+</html>
