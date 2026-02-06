@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Cavian 2.0</title>
+  
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
+  
+  <!-- Modular CSS -->
+  <link rel="stylesheet" href="/themes/theme.css">
+  <link rel="stylesheet" href="/css/cavianUI.css">
+  <link rel="stylesheet" href="/css/cavianUI-v2.css">
+  
+  <!-- Theme Switcher -->
+  <script src="/js/theme-switcher.js" defer></script>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <h1>🎛️ Cavian</h1>
+      <span class="context-badge" id="contextDisplay">G1 P1 CH1</span>
+    </div>
+    <div class="header-right">
+      <button class="icon-btn" id="swingBtn" title="Swing">〰️</button>
+      <button class="icon-btn" id="actionsBtn" title="Actions">⚡</button>
+      <select id="viewSelect" class="view-select">
+        <option value="vertical">Grid</option>
+        <option value="horizontal">8×8</option>
+        <option value="horizontal64">64</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- Controls Bar -->
+    <div class="controls-bar">
+      <!-- BPM Control -->
+      <div class="control-group bpm-group">
+        <label>BPM</label>
+        <div class="bpm-control">
+          <button class="ctrl-btn" onclick="changeTempo(-5)">−</button>
+          <span class="bpm-value" id="bpmDisplay">120</span>
+          <button class="ctrl-btn" onclick="changeTempo(5)">+</button>
+        </div>
+      </div>
+
+      <!-- Group Selector -->
+      <div class="control-group">
+        <label>GROUP</label>
+        <div class="selector">
+          <button class="ctrl-btn" onclick="changeGroup(-1)">◀</button>
+          <span class="selector-value" id="groupDisplay">1</span>
+          <button class="ctrl-btn" onclick="changeGroup(1)">▶</button>
+        </div>
+      </div>
+
+      <!-- Preset Selector -->
+      <div class="control-group">
+        <label>PRESET</label>
+        <div class="selector">
+          <button class="ctrl-btn" onclick="changePreset(-1)">◀</button>
+          <span class="selector-value" id="presetDisplay">1</span>
+          <button class="ctrl-btn" onclick="changePreset(1)">▶</button>
+        </div>
+      </div>
+
+      <!-- Channel Selector -->
+      <div class="control-group">
+        <label>CH</label>
+        <div class="selector">
+          <button class="ctrl-btn" onclick="changeChannel(-1)">◀</button>
+          <span class="selector-value" id="channelDisplay">1</span>
+          <button class="ctrl-btn" onclick="changeChannel(1)">▶</button>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="control-group actions-group">
+        <button class="action-btn" onclick="openSaveModal()">💾</button>
+        <button class="action-btn" onclick="openLoadModal()">📂</button>
+        <button class="action-btn" onclick="openSettings()">⚙️</button>
+      </div>
+    </div>
+
+    <!-- Grid Container -->
+    <div class="grid-container">
+      <!-- Row Labels -->
+      <div class="row-labels" id="rowLabels"></div>
+      
+      <!-- Grid Area -->
+      <div class="grid-area" id="gridArea">
+        <div class="grid" id="sequencer"></div>
+      </div>
+    </div>
+
+    <!-- Mute Strip -->
+    <div class="mute-strip" id="muteStrip"></div>
+
+    <!-- Playback Status -->
+    <div class="playback-bar">
+      <div class="step-indicator" id="stepIndicator"></div>
+    </div>
+  </main>
+
+  <!-- Status Toast -->
+  <div class="toast" id="statusBar"></div>
+
+  <!-- Modals (Save/Load) -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modalTitle">Save Pattern</h3>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- Shared JavaScript -->
+  <script src="/js/utils.js"></script>
+  <script src="/js/cavianUI-v2.js"></script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+/* Cavian2 Theme System - CSS Custom Properties */
+:root {
+  /* Core Palette */
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-card: rgba(255, 255, 255, 0.05);
+  --bg-hover: rgba(255, 255, 255, 0.1);
+  --bg-active: rgba(255, 255, 255, 0.15);
+  
+  /* Accents */
+  --accent-primary: #667eea;
+  --accent-secondary: #764ba2;
+  --accent-glow: rgba(102, 126, 234, 0.4);
+  
+  /* State Colors */
+  --color-success: #10b981;
+  --color-success-bg: rgba(16, 185, 129, 0.2);
+  --color-success-border: rgba(16, 185, 129, 0.5);
+  
+  --color-error: #ef4444;
+  --color-error-bg: rgba(239, 68, 68, 0.2);
+  --color-error-border: rgba(239, 68, 68, 0.5);
+  
+  --color-warning: #f59e0b;
+  --color-warning-bg: rgba(245, 158, 11, 0.2);
+  --color-warning-border: rgba(245, 158, 11, 0.5);
+  
+  --color-info: #3b82f6;
+  --color-info-bg: rgba(59, 130, 246, 0.2);
+  --color-info-border: rgba(59, 130, 246, 0.5);
+  
+  --color-purple: #8b5cf6;
+  --color-purple-bg: rgba(139, 92, 246, 0.2);
+  --color-purple-border: rgba(139, 92, 246, 0.5);
+  
+  --color-orange: #f97316;
+  --color-orange-bg: rgba(249, 115, 22, 0.2);
+  --color-orange-border: rgba(249, 115, 22, 0.5);
+  
+  --color-green: #84cc16;
+  --color-green-bg: rgba(132, 204, 22, 0.2);
+  --color-green-border: rgba(132, 204, 22, 0.5);
+  
+  /* Text */
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --text-muted: #888888;
+  
+  /* Borders */
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.2);
+  --border-active: rgba(255, 255, 255, 0.3);
+  
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --gradient-error: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  
+  /* Shadows */
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 20px rgba(102, 126, 234, 0.5);
+  
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  
+  /* Spacing */
+  --spacing-xs: 5px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 15px;
+  --spacing-xl: 20px;
+  
+  /* Typography */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-size-xs: 10px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 20px;
+  --font-size-xl: 28px;
+}
+
+/* Dark Theme (Default) */
+[data-theme="dark"] {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-card: rgba(255, 255, 255, 0.05);
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+}
+
+/* Light Theme */
+[data-theme="light"] {
+  --bg-primary: #f0f0f0;
+  --bg-secondary: #ffffff;
+  --bg-card: rgba(0, 0, 0, 0.05);
+  --bg-hover: rgba(0, 0, 0, 0.08);
+  --bg-active: rgba(0, 0, 0, 0.12);
+  --text-primary: #222222;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --border-color: rgba(0, 0, 0, 0.1);
+  --border-hover: rgba(0, 0, 0, 0.2);
+  --border-active: rgba(0, 0, 0, 0.3);
+}
+
+/* High Contrast Theme */
+[data-theme="high-contrast"] {
+  --bg-primary: #000000;
+  --bg-secondary: #111111;
+  --bg-card: rgba(255, 255, 255, 0.1);
+  --text-primary: #ffffff;
+  --text-secondary: #dddddd;
+  --accent-primary: #00aaff;
+  --color-success: #00ff00;
+  --color-error: #ff0000;
+  --color-warning: #ffff00;
+}
+
+/* Neon Theme */
+[data-theme="neon"] {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #151520;
+  --accent-primary: #00ff88;
+  --accent-secondary: #ff00ff;
+  --color-success: #00ff88;
+  --color-error: #ff0066;
+  --color-warning: #ffcc00;
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --shadow-glow: 0 0 30px rgba(0, 255, 136, 0.6);
+}
+
+/* Monochrome Theme */
+[data-theme="mono"] {
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #2a2a2a;
+  --text-primary: #ffffff;
+  --text-secondary: #cccccc;
+  --accent-primary: #ffffff;
+  --color-success: #ffffff;
+  --color-error: #ffffff;
+  --color-warning: #ffffff;
+}

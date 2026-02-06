@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cavian Upload</title>
+  
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
+  
+  <!-- Modular CSS -->
+  <link rel="stylesheet" href="/themes/theme.css">
+  <link rel="stylesheet" href="/css/upload.css">
+  
+  <!-- Theme Switcher -->
+  <script src="/js/theme-switcher.js" defer></script>
+</head>
+<body>
+  <div class="upload-container">
+    <!-- Back Button -->
+    <button class="back-btn" onclick="goBack()">
+      ← Back to Sequencer
+    </button>
+
+    <!-- Header -->
+    <div class="upload-header">
+      <h1>📤 Upload Files</h1>
+      <p class="subtitle">Upload UI files or flash firmware to your Cavian sequencer.</p>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="upload-tabs">
+      <button class="tab-btn active" data-tab="files" onclick="switchTab('files')">
+        📁 Files
+      </button>
+      <button class="tab-btn" data-tab="firmware" onclick="switchTab('firmware')">
+        ⚡ Firmware
+      </button>
+    </div>
+
+    <!-- Files Tab -->
+    <div class="tab-content active" id="files-tab">
+      <div class="file-drop-zone" id="dropZone">
+        <div class="icon">📂</div>
+        <div class="text">Drag & drop files here</div>
+        <div class="text">or click to browse</div>
+        <div class="hint">Allowed: HTML, CSS, JS, JSON, BIN (max 2MB each)</div>
+      </div>
+      <input type="file" id="fileInput" class="file-input" multiple accept=".html,.css,.js,.json,.bin,.txt">
+      
+      <div class="file-list" id="fileList"></div>
+      
+      <div style="margin-top: 20px;">
+        <button class="btn btn-primary" id="uploadBtn" onclick="uploadFiles()" style="width: 100%;">
+          📤 Upload Files
+        </button>
+      </div>
+      
+      <div class="status-message" id="uploadStatus"></div>
+    </div>
+
+    <!-- Firmware Tab -->
+    <div class="tab-content" id="firmware-tab">
+      <div class="flasher-container">
+        <div class="flasher-icon">🔌</div>
+        <div class="flasher-title">Flash Firmware</div>
+        <div class="flasher-desc">
+          Update your Cavian's firmware over USB.<br>
+          Requires Chrome or Edge (Web Serial API).
+        </div>
+        <button class="flasher-btn" id="flasherBtn">
+          ⚡ Flash Firmware
+        </button>
+        
+        <div class="flasher-progress" id="flasherProgress">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <div class="progress-text" id="progressText">Preparing...</div>
+        </div>
+        
+        <div class="status-message" id="firmwareStatus"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modular JavaScript -->
+  <script src="/js/utils.js"></script>
+  <script src="/js/upload.js"></script>
+</body>
+</html>

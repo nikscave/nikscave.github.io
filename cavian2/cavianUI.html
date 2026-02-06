@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cavian 2.0</title>
+  
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
+  
+  <!-- Modular CSS -->
+  <link rel="stylesheet" href="/themes/theme.css">
+  <link rel="stylesheet" href="/css/cavianUI.css">
+  
+  <!-- Theme Switcher -->
+  <script src="/js/theme-switcher.js" defer></script>
+</head>
+<body>
+  <!-- Top Bar -->
+  <div id="topBar">
+    <button class="view-button active" id="btn-vertical" onclick="switchView('vertical')">SEQ</button>
+    <button class="view-button" id="btn-8x8" onclick="switchView('horizontal')">8×8</button>
+    <button class="view-button" id="btn-64" onclick="switchView('horizontal64')">64</button>
+    <button class="view-button" id="btn-swing" onclick="switchView('swing')">SWING</button>
+    <button class="view-button" id="btn-mute" onclick="switchView('actions')">ACTIONS</button>
+  </div>
+
+  <!-- Main Layout -->
+  <div id="mainLayout">
+    <!-- BPM Control -->
+    <div id="bpmColumn">
+      <label>BPM</label>
+      <input type="range" id="bpmInput" min="1" max="400" value="120">
+      <div id="bpmDisplay">120</div>
+    </div>
+
+    <!-- Grid Area -->
+    <div id="gridArea">
+      <!-- Vertical Sequencer -->
+      <div id="sequencer-container">
+        <div id="sequencer"></div>
+      </div>
+      
+      <!-- Horizontal Container -->
+      <div id="horizontal-container" style="display: none;">
+        <div id="horizontal-grid"></div>
+      </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div id="controlPanel">
+      <div id="controlGrid">
+        <!-- Group Display -->
+        <div class="control-section">
+          <div class="control-label">GROUP</div>
+          <div class="status-display group">
+            <span class="status-text">G</span>
+            <span class="status-value" id="groupDisplay">1</span>
+          </div>
+          <div class="control-buttons">
+            <button class="control-btn up" onclick="changeGroup('up')">▲</button>
+            <button class="control-btn down" onclick="changeGroup('down')">▼</button>
+          </div>
+        </div>
+
+        <!-- Preset Display -->
+        <div class="control-section">
+          <div class="control-label">PRESET</div>
+          <div class="status-display preset">
+            <span class="status-text">P</span>
+            <span class="status-value" id="presetDisplay">1</span>
+          </div>
+          <div class="control-buttons">
+            <button class="control-btn up" onclick="changePreset('up')">▲</button>
+            <button class="control-btn down" onclick="changePreset('down')">▼</button>
+          </div>
+        </div>
+
+        <!-- Channel Display -->
+        <div class="control-section">
+          <div class="control-label">CHANNEL</div>
+          <div class="status-display channel">
+            <span class="status-text">CH</span>
+            <span class="status-value" id="channelDisplay">1</span>
+          </div>
+          <div class="control-buttons">
+            <button class="control-btn up" onclick="changeChannel('up')">▲</button>
+            <button class="control-btn down" onclick="changeChannel('down')">▼</button>
+          </div>
+        </div>
+
+        <!-- Tempo Display -->
+        <div class="control-section">
+          <div class="control-label">TEMPO</div>
+          <div class="status-display tempo">
+            <span class="status-text">BPM</span>
+            <span class="status-value" id="tempoDisplay">120</span>
+          </div>
+          <div class="control-buttons">
+            <button class="control-btn up" onclick="changeTempo('up')">▲</button>
+            <button class="control-btn down" onclick="changeTempo('down')">▼</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Bar -->
+  <div id="bottomBar">
+    <div id="dualContextControls">
+      <div class="left-buttons">
+        <button onclick="openSettings()">⚙️ Settings</button>
+        <button onclick="openSaveModal()">💾 Save</button>
+        <button onclick="openLoadModal()">📂 Load</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div id="statusBar"></div>
+
+  <!-- Save Modal -->
+  <div id="saveModal" class="modal">
+    <div class="modal-content">
+      <h3>💾 Save Pattern</h3>
+      <div class="slot-selection" id="saveSlots"></div>
+      <div class="save-boxes" id="saveBoxes"></div>
+      <div id="nameInputContainer">
+        <input type="text" id="patternName" placeholder="Pattern name (optional)">
+      </div>
+      <div style="margin-top: 20px; text-align: right;">
+        <button onclick="closeModal()">Cancel</button>
+        <button onclick="savePattern()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load Modal -->
+  <div id="loadModal" class="modal">
+    <div class="modal-content">
+      <h3>📂 Load Pattern</h3>
+      <div class="slot-selection" id="loadSlots"></div>
+      <div class="save-boxes" id="loadBoxes"></div>
+      <div style="margin-top: 20px; text-align: right;">
+        <button onclick="closeModal()">Cancel</button>
+        <button onclick="loadPattern()">Load</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Swing Editor (hidden by default) -->
+  <div id="swingEditor" style="display: none;">
+    <!-- Swing editor content loaded via AJAX or inline -->
+  </div>
+
+  <!-- Actions Editor (hidden by default) -->
+  <div id="actionsEditor" style="display: none;">
+    <!-- Actions editor content -->
+  </div>
+
+  <!-- Modular JavaScript -->
+  <script src="/js/utils.js"></script>
+  <script src="/js/cavianUI.js"></script>
+  
+  <!-- Page-specific initialization -->
+  <script>
+    // Initialize the grid on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('Cavian2 UI initialized');
+      
+      // Generate vertical grid buttons
+      const sequencer = document.getElementById('sequencer');
+      let html = '';
+      
+      // Generate 8x8 grid
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          html += `<div class="button" data-row="${row}" data-col="${col}"></div>`;
+        }
+      }
+      sequencer.innerHTML = html;
+      
+      // Initialize display values
+      updateDisplays();
+    });
+  </script>
+</body>
+</html>

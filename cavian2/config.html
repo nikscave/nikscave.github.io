@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cavian Settings</title>
+  
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
+  
+  <!-- Modular CSS -->
+  <link rel="stylesheet" href="/themes/theme.css">
+  <link rel="stylesheet" href="/css/config.css">
+  
+  <!-- Theme Switcher -->
+  <script src="/js/theme-switcher.js" defer></script>
+</head>
+<body>
+  <div class="settings-container">
+    <!-- Back Button -->
+    <button class="back-btn" onclick="goBack()">
+      ← Back to Sequencer
+    </button>
+
+    <!-- Header -->
+    <div class="settings-header">
+      <h1>⚙️ Settings</h1>
+      <p class="subtitle">Configure WiFi and hotspot settings for your Cavian sequencer.</p>
+    </div>
+
+    <!-- Status Banner -->
+    <div class="status-banner" id="statusBanner">
+      <span class="status-icon">✅</span>
+      <span class="status-title">Ready to configure</span>
+    </div>
+
+    <!-- Current Status -->
+    <div style="margin-bottom: 20px;">
+      <label>Current Mode</label>
+      <div style="padding: 12px; background: rgba(102, 126, 234, 0.15); border: 2px solid rgba(102, 126, 234, 0.3); border-radius: 8px;">
+        <strong id="currentMode">Loading...</strong>
+        <span style="color: #888; margin-left: 10px;" id="currentDetail"></span>
+      </div>
+    </div>
+
+    <!-- Mode Selector -->
+    <label style="display: block; margin-bottom: 10px;">Select Mode</label>
+    <div class="mode-selector">
+      <div class="mode-card active" id="hotspotCard" onclick="selectMode('hotspot')">
+        <div class="mode-icon">📱</div>
+        <div class="mode-title">Hotspot</div>
+        <div class="mode-desc">Cavian creates its own WiFi network. Best for standalone use.</div>
+      </div>
+      
+      <div class="mode-card" id="wifiCard" onclick="selectMode('wifi')">
+        <div class="mode-icon">📶</div>
+        <div class="mode-title">WiFi</div>
+        <div class="mode-desc">Connect to an existing WiFi network. Requires network nearby.</div>
+      </div>
+    </div>
+
+    <!-- Hotspot Panel -->
+    <div class="settings-panel active" id="hotspotPanel">
+      <div class="form-group">
+        <label>Hotspot Name (SSID)</label>
+        <input type="text" id="hotspotSSID" class="form-input" placeholder="CAVIAN_2" maxlength="32">
+        <div class="input-hint">📱 Name shown when searching for WiFi networks</div>
+      </div>
+      
+      <div class="form-group">
+        <label>Hotspot Password</label>
+        <div class="password-wrapper">
+          <input type="password" id="hotspotPassword" class="form-input" placeholder="••••••••" maxlength="64">
+          <button class="password-toggle" onclick="togglePassword('hotspotPassword')">👁️</button>
+        </div>
+        <div class="input-hint">🔒 Minimum 8 characters</div>
+      </div>
+    </div>
+
+    <!-- WiFi Panel -->
+    <div class="settings-panel" id="wifiPanel">
+      <div class="form-group">
+        <label>Network Name (SSID)</label>
+        <div style="display: flex; gap: 10px;">
+          <input type="text" id="wifiSSID" class="form-input" placeholder="Your WiFi name" maxlength="32" style="flex: 1;">
+          <button onclick="scanNetworks()" style="padding: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer;">
+            <span id="scanIcon">🔍</span>
+          </button>
+        </div>
+        <div class="input-hint">📶 The name of your WiFi network</div>
+      </div>
+      
+      <div class="wifi-networks" id="wifiNetworks">
+        <div style="text-align: center; padding: 20px; color: #666;">Click scan to find networks</div>
+      </div>
+      
+      <div class="form-group" style="margin-top: 15px;">
+        <label>WiFi Password</label>
+        <div class="password-wrapper">
+          <input type="password" id="wifiPassword" class="form-input" placeholder="••••••••" maxlength="64">
+          <button class="password-toggle" onclick="togglePassword('wifiPassword')">👁️</button>
+        </div>
+        <div class="input-hint">🔒 Leave blank for open networks</div>
+      </div>
+    </div>
+
+    <!-- Save Button -->
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="cancelChanges()">Cancel</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveAndApply()">💾 Save & Reboot</button>
+    </div>
+  </div>
+
+  <!-- Reboot Modal -->
+  <div class="modal" id="rebootModal">
+    <div class="modal-content">
+      <h2>🔄 Rebooting...</h2>
+      <div class="countdown" id="countdown">10</div>
+      <div class="reboot-message" id="rebootMessage"></div>
+    </div>
+  </div>
+
+  <!-- Modular JavaScript -->
+  <script src="/js/utils.js"></script>
+  <script src="/js/config.js"></script>
+</body>
+</html>
