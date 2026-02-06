@@ -1,8 +1,18 @@
 /* Cavian2 Main JavaScript */
 /* Uses shared utilities from js/utils.js */
 
-// Demo mode flag - set true for standalone use without hardware
-const DEMO_MODE = window.location.hostname.includes('github.io') || window.location.hostname !== 'mycavian.local';
+// Load WebSocket config first
+const wsScript = document.createElement('script');
+wsScript.src = '/js/ws-config.js';
+wsScript.onload = function() {
+  initApp();
+};
+document.head.appendChild(wsScript);
+
+// Demo mode flag - auto-detect based on hostname
+const DEMO_MODE = window.location.hostname.includes('github.io') || 
+                  window.location.hostname === '' ||
+                  !window.location.hostname.includes('cavian');
 
 let bpm = 120;
 let resetTiming = 20;
@@ -93,7 +103,7 @@ const channelSwing = Array.from({ length: 8 }, () =>
   Array(8).fill(0)
 );
 
-// WebSocket connection
+// WebSocket connection (initialized in initApp)
 let socket = null;
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 3;
@@ -125,32 +135,32 @@ function startDemoMode() {
   SEQUENCER_ACTIVE = true;
   console.log('Demo mode started');
   
-  // Update displays
   updateDisplays();
   updateStepsGrid(activeGroup, activePreset, activeChannel);
   updateActiveIndicators(activeGroup, activePreset, activeChannel);
-  
-  // Start step animation
   startStepAnimation();
   
-  // Show demo mode status
   const statusBar = document.getElementById('statusBar');
   if (statusBar) {
-    statusBar.textContent = '🎮 Demo Mode - Connect to device for live control';
+    statusBar.textContent = '🎮 Demo Mode - Use ?ws=YOUR_ESP32_IP to connect';
     statusBar.style.background = 'rgba(255, 165, 0, 0.9)';
     statusBar.style.color = '#000';
   }
 }
 
 function initWebSocket() {
-  const wsUrl = "ws://mycavian.local:81/";
+  if (!window.CAVIAN_WS_URL) {
+    console.log('WebSocket config not loaded, starting demo mode');
+    startDemoMode();
+    return;
+  }
   
   try {
-    socket = new WebSocket(wsUrl);
+    socket = new WebSocket(window.CAVIAN_WS_URL);
     socket.binaryType = 'arraybuffer';
     
-    socket.onopen = function () {
-      console.log('WebSocket connected');
+    socket.onopen = function() {
+      console.log('WebSocket connected:', window.CAVIAN_WS_URL);
       reconnectAttempts = 0;
       socket.send(JSON.stringify({ type: "socket_ready_send_default_pattern" }));
       socket.send(JSON.stringify({ type: "get_actions" }));
@@ -158,7 +168,7 @@ function initWebSocket() {
       caveArray = null;
     };
     
-    socket.onmessage = function (event) {
+    socket.onmessage = function(event) {
       if (event.data instanceof ArrayBuffer) {
         handleBinaryData(event.data);
       } else if (typeof event.data === 'string') {
@@ -166,18 +176,18 @@ function initWebSocket() {
       }
     };
     
-    socket.onerror = function (error) {
+    socket.onerror = function(error) {
       console.log('WebSocket error, starting demo mode');
       startDemoMode();
     };
     
-    socket.onclose = function () {
+    socket.onclose = function() {
       if (reconnectAttempts < maxReconnectAttempts) {
         reconnectAttempts++;
-        console.log(`WebSocket closed, reconnecting... (${reconnectAttempts}/${maxReconnectAttempts})`);
+        console.log(`Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts})`);
         setTimeout(initWebSocket, 2000);
       } else {
-        console.log('Max reconnect attempts reached, starting demo mode');
+        console.log('Max reconnect attempts, starting demo mode');
         startDemoMode();
       }
     };
@@ -187,13 +197,14 @@ function initWebSocket() {
   }
 }
 
-// Initialize WebSocket or Demo mode
-if (DEMO_MODE) {
-  console.log('Running in demo mode (GitHub Pages or non-localhost)');
-  window.addEventListener('DOMContentLoaded', startDemoMode);
-} else {
-  console.log('Attempting WebSocket connection to device');
-  initWebSocket();
+function initApp() {
+  if (DEMO_MODE) {
+    console.log('Demo mode detected');
+    startDemoMode();
+  } else {
+    console.log('Attempting WebSocket connection');
+    initWebSocket();
+  }
 }
 
 window.addEventListener('beforeunload', (e) => {
@@ -205,12 +216,9 @@ function openSettings() {
 }
 
 function updateDisplays() {
-  const gd = document.getElementById('groupDisplay');
-  const pd = document.getElementById('presetDisplay');
-  const cd = document.getElementById('channelDisplay');
-  if (gd) gd.textContent = activeGroup + 1;
-  if (pd) pd.textContent = activePreset + 1;
-  if (cd) cd.textContent = activeChannel + 1;
+  document.getElementById('groupDisplay').textContent = activeGroup + 1;
+  document.getElementById('presetDisplay').textContent = activePreset + 1;
+  document.getElementById('channelDisplay').textContent = activeChannel + 1;
 }
 
 function cacheButtonRects() {
@@ -224,173 +232,6 @@ function cacheButtonRects() {
     });
   });
 }
-
-function updateStepsGrid(group, preset, channel) {
-  const sequencer = document.getElementById('sequencer');
-  if (!sequencer || !caveArray) return;
-  
-  let html = '';
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const val = caveArray[group][preset][row][col] || 0;
-      const isPlaying = col === currentStep;
-      const classes = ['button'];
-      if (val === 1) classes.push('active');
-      else if (val === 9) classes.push('always-active');
-      if (isPlaying) classes.push('playing');
-      html += `<div class="${classes.join(' ')}" data-row="${row}" data-col="${col}" onclick="toggleCell(${row}, ${col})"></div>`;
-    }
-  }
-  sequencer.innerHTML = html;
-}
-
-function updateActiveIndicators(group, preset, channel) {
-  // Visual feedback for active group/preset changes
-  const groupDisplay = document.getElementById('groupDisplay');
-  const presetDisplay = document.getElementById('presetDisplay');
-  if (groupDisplay) groupDisplay.style.color = 'var(--accent-primary)';
-  if (presetDisplay) presetDisplay.style.color = 'var(--accent-primary)';
-  setTimeout(() => {
-    if (groupDisplay) groupDisplay.style.color = '';
-    if (presetDisplay) presetDisplay.style.color = '';
-  }, 300);
-}
-
-function startStepAnimation() {
-  if (stepInterval) clearInterval(stepInterval);
-  stepInterval = setInterval(() => {
-    if (SEQUENCER_ACTIVE) {
-      currentStep = (currentStep + 1) % 8;
-      updateStepsGrid(activeGroup, activePreset, activeChannel);
-      
-      // Update step indicator
-      const dots = document.querySelectorAll('.step-dot');
-      dots.forEach((dot, i) => {
-        dot.classList.toggle('active', i === currentStep);
-      });
-    }
-  }, (60000 / bpm) / 4);
-}
-
-function toggleCell(row, col) {
-  if (!caveArray) return;
-  
-  let newVal;
-  if (viewMode === 'horizontal64') {
-    newVal = caveArray[activeGroup][row][activeChannel][col];
-    newVal = (newVal === 0) ? 1 : (newVal === 1) ? 9 : 0;
-    caveArray[activeGroup][row][activeChannel][col] = newVal;
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: "64step", row: row, col: col, value: newVal }));
-    }
-  } else {
-    newVal = caveArray[activeGroup][activePreset][row][col];
-    newVal = (newVal === 0) ? 1 : (newVal === 1) ? 9 : 0;
-    caveArray[activeGroup][activePreset][row][col] = newVal;
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: "8x8step", row: row, col: col, value: newVal }));
-    }
-  }
-  
-  updateStepsGrid(activeGroup, activePreset, activeChannel);
-  showStatus(`Cell ${row + 1}:${col + 1} = ${newVal}`, 'success');
-}
-
-function changeGroup(direction) {
-  activeGroup = (activeGroup + direction + 8) % 8;
-  updateDisplays();
-  updownPressed("group", direction);
-  updateActiveIndicators(activeGroup, activePreset, activeChannel);
-  updateStepsGrid(activeGroup, activePreset, activeChannel);
-}
-
-function changePreset(direction) {
-  activePreset = (activePreset + direction + 8) % 8;
-  updateDisplays();
-  updownPressed("preset", direction);
-  updateActiveIndicators(activeGroup, activePreset, activeChannel);
-  updateStepsGrid(activeGroup, activePreset, activeChannel);
-}
-
-function changeChannel(direction) {
-  activeChannel = (activeChannel + direction + 8) % 8;
-  updateDisplays();
-  updownPressed("channel", direction);
-  updateStepsGrid(activeGroup, activePreset, activeChannel);
-}
-
-function changeTempo(direction) {
-  const bpmInput = document.getElementById('bpmInput');
-  const bpmDisplay = document.getElementById('bpmDisplay');
-  const tempoDisplay = document.getElementById('tempoDisplay');
-  
-  if (direction === 'up' && bpm < 400) bpm += 1;
-  if (direction === 'down' && bpm > 1) bpm -= 1;
-  
-  if (bpmDisplay) bpmDisplay.textContent = bpm;
-  if (tempoDisplay) tempoDisplay.textContent = bpm;
-  if (bpmInput) bpmInput.value = bpm;
-  
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: "bpm", bpm: bpm }));
-  }
-  
-  // Restart animation with new tempo
-  startStepAnimation();
-  showStatus(`BPM: ${bpm}`, 'info');
-}
-
-function updownPressed(type, direction) {
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: "updownPressed", segment: type, direction }));
-  }
-}
-
-// Override other functions for demo mode
-function handleBinaryData(data) {
-  console.log('Binary data received (demo mode ignores)');
-}
-
-function handleDataReceived(data) {
-  if (DEMO_MODE) return; // Ignore WebSocket data in demo mode
-  
-  if (typeof data === 'string') {
-    try {
-      const parsed = JSON.parse(data);
-      
-      if (parsed.type === 'cave_data' || parsed.type === 'full_pattern') {
-        caveArray = parsed.caveArray || parsed.patternArray;
-        if (parsed.bpm) bpm = parsed.bpm;
-        PATTERN_RECEIVED = true;
-        updateDisplays();
-        updateStepsGrid(activeGroup, activePreset, activeChannel);
-        startStepAnimation();
-      }
-    } catch (e) {
-      console.log('Data received:', data);
-    }
-  }
-}
-
-// Placeholder for functions that need implementation
-function switchView(view) {
-  viewMode = view;
-  document.querySelectorAll('.view-button').forEach(btn => btn.classList.remove('active'));
-  document.getElementById('btn-' + view)?.classList.add('active');
-  
-  const vertical = document.getElementById('sequencer-container');
-  const horizontal = document.getElementById('horizontal-container');
-  
-  if (vertical) vertical.style.display = view === 'vertical' ? 'block' : 'none';
-  if (horizontal) horizontal.style.display = view !== 'vertical' ? 'block' : 'none';
-  
-  updateStepsGrid(activeGroup, activePreset, activeChannel);
-  showStatus('View: ' + view, 'info');
-}
-
-function openSaveModal() { showStatus('Save modal (demo)', 'info'); }
-function openLoadModal() { showStatus('Load modal (demo)', 'info'); }
-function closeModal() {}
 
 function getTouchedButton(x, y) {
   for (let i = 0; i < buttonRects.length; i++) {
@@ -503,7 +344,9 @@ function toggleButton(row, col) {
     const current = caveArray[activeGroup][row][activeChannel][col];
     newVal = (current === 0) ? 1 : (current === 1) ? 9 : 0;
     caveArray[activeGroup][row][activeChannel][col] = newVal;
-    socket.send(JSON.stringify({ type: "64step", row: row, col: col, value: newVal }));
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "64step", row: row, col: col, value: newVal }));
+    }
     
     const btn = document.querySelector(`#horizontal-grid .button[data-row='${row}'][data-col='${col}']`);
     if (btn) {
@@ -515,7 +358,9 @@ function toggleButton(row, col) {
     const current = caveArray[activeGroup][activePreset][row][col];
     newVal = (current === 0) ? 1 : (current === 1) ? 9 : 0;
     caveArray[activeGroup][activePreset][row][col] = newVal;
-    socket.send(JSON.stringify({ type: "8x8step", row: row, col: col, value: newVal }));
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "8x8step", row: row, col: col, value: newVal }));
+    }
     
     const btn = document.querySelector(`#horizontal-grid .button[data-row='${row}'][data-col='${col}']`);
     if (btn) {
@@ -713,5 +558,7 @@ function changeTempo(direction) {
   bpmDisplay.textContent = currentBpm;
   bpmInput.value = currentBpm;
    
-  socket.send(JSON.stringify({ type: "bpm", bpm: currentBpm }));
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "bpm", bpm: currentBpm }));
+  }
 }
