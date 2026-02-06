@@ -1,5 +1,8 @@
 /* Cavian2 v2 UI Logic - Clean, focused, reusable */
 
+// Demo mode flag - set true when no hardware connection
+const DEMO_MODE = true;
+
 // State
 let state = {
   bpm: 120,
@@ -15,29 +18,122 @@ let state = {
 // Constants
 const LABELS = ['CH1', 'CH2', 'CH3', 'CH4', 'CH5', 'CH6', 'CH7', 'CH8'];
 
-// WebSocket connection
-const socket = new WebSocket(`ws://${window.location.hostname}:81`);
-
-socket.binaryType = 'arraybuffer';
-
-socket.onopen = function() {
-  console.log('WebSocket connected');
-  socket.send(JSON.stringify({ type: "socket_ready_send_default_pattern" }));
-  socket.send(JSON.stringify({ type: "get_actions" }));
-};
-
-socket.onmessage = function(event) {
-  if (event.data instanceof ArrayBuffer) {
-    handleBinaryData(event.data);
-  } else if (typeof event.data === 'string') {
-    handleDataReceived(JSON.parse(event.data));
+// Generate demo caveArray data
+function generateDemoData() {
+  const demo = [];
+  for (let g = 0; g < 8; g++) {
+    const presets = [];
+    for (let p = 0; p < 8; p++) {
+      const rows = [];
+      for (let ch = 0; ch < 8; ch++) {
+        const steps = [];
+        for (let s = 0; s < 8; s++) {
+          // Create interesting patterns based on row/step
+          const val = (g + p + ch + s) % 3;
+          steps.push(val === 2 ? 0 : val);
+        }
+        rows.push(steps);
+      }
+      presets.push(rows);
+    }
+    demo.push(presets);
   }
-};
+  return demo;
+}
 
-socket.onclose = function() {
-  console.log('WebSocket closed, reconnecting...');
-  setTimeout(() => location.reload(), 3000);
-};
+// WebSocket connection
+let socket = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+
+function initWebSocket() {
+  const wsUrl = `ws://${window.location.hostname}:81`;
+  
+  try {
+    socket = new WebSocket(wsUrl);
+    socket.binaryType = 'arraybuffer';
+    
+    socket.onopen = function() {
+      console.log('WebSocket connected');
+      reconnectAttempts = 0;
+      if (DEMO_MODE) {
+        showStatus('🔌 Connected to device - leaving demo mode', 'success');
+      }
+      socket.send(JSON.stringify({ type: "socket_ready_send_default_pattern" }));
+      socket.send(JSON.stringify({ type: "get_actions" }));
+    };
+    
+    socket.onmessage = function(event) {
+      if (event.data instanceof ArrayBuffer) {
+        handleBinaryData(event.data);
+      } else if (typeof event.data === 'string') {
+        handleDataReceived(JSON.parse(event.data));
+      }
+    };
+    
+    socket.onclose = function() {
+      console.log('WebSocket closed');
+      if (reconnectAttempts < maxReconnectAttempts) {
+        reconnectAttempts++;
+        console.log(`Reconnecting... attempt ${reconnectAttempts}/${maxReconnectAttempts}`);
+        setTimeout(initWebSocket, 2000);
+      }
+    };
+    
+    socket.onerror = function(error) {
+      console.log('WebSocket error, running in demo mode');
+      startDemoMode();
+    };
+  } catch (e) {
+    console.log('WebSocket unavailable, running in demo mode');
+    startDemoMode();
+  }
+}
+
+// Demo mode playback
+let demoInterval = null;
+
+function startDemoMode() {
+  if (DEMO_MODE) return; // Already in demo mode
+  
+  // Generate demo data
+  state.caveArray = generateDemoData();
+  state.bpm = 120;
+  
+  updateDisplays();
+  renderGrid();
+  renderMuteStrip();
+  renderStepIndicator();
+  
+  showStatus('🎮 Demo Mode - Connect device for live control', 'info');
+  
+  // Start animation loop
+  if (demoInterval) clearInterval(demoInterval);
+  demoInterval = setInterval(() => {
+    state.currentStep = (state.currentStep + 1) % 8;
+    renderGrid();
+    renderStepIndicator();
+  }, (60000 / state.bpm) / 4); // Quarter note timing
+}
+
+// Stop demo mode when real connection establishes
+function stopDemoMode() {
+  if (demoInterval) {
+    clearInterval(demoInterval);
+    demoInterval = null;
+  }
+}
+
+// Modify onopen to exit demo mode
+function setupSocketHandlers() {
+  if (socket) {
+    const originalOnOpen = socket.onopen;
+    socket.onopen = function() {
+      stopDemoMode();
+      if (originalOnOpen) originalOnOpen();
+    };
+  }
+}
 
 // DOM Elements
 const elements = {};
@@ -45,12 +141,22 @@ const elements = {};
 // Initialize on load
 document.addEventListener('DOMContentLoaded', function() {
   cacheElements();
+  
+  // Generate demo data initially
+  state.caveArray = generateDemoData();
+  
   renderGrid();
   renderRowLabels();
   renderMuteStrip();
   renderStepIndicator();
   updateDisplays();
   attachEventListeners();
+  
+  // Try to connect to WebSocket
+  initWebSocket();
+  
+  // Start demo playback immediately
+  startDemoMode();
 });
 
 // Cache DOM elements
@@ -177,21 +283,29 @@ function toggleCell(row, col) {
   if (viewMode === 'horizontal64') {
     currentVal = state.caveArray[activeGroup][row][activeChannel][col];
     state.caveArray[activeGroup][row][activeChannel][col] = (currentVal + 1) % 3;
-    socket.send(JSON.stringify({ type: "64step", row, col, value: state.caveArray[activeGroup][row][activeChannel][col] }));
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "64step", row, col, value: state.caveArray[activeGroup][row][activeChannel][col] }));
+    }
   } else {
     currentVal = state.caveArray[activeGroup][activePreset][row][col];
     state.caveArray[activeGroup][activePreset][row][col] = (currentVal + 1) % 3;
-    socket.send(JSON.stringify({ type: "8x8step", row, col, value: state.caveArray[activeGroup][activePreset][row][col] }));
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "8x8step", row, col, value: state.caveArray[activeGroup][activePreset][row][col] }));
+    }
   }
   
   renderGrid();
+  showStatus(`Cell ${row + 1}:${col + 1} = ${state.caveArray[activeGroup][activePreset][row][col]}`, 'success');
 }
 
 // Toggle mute
 function toggleMute(ch) {
   state.muteArray[ch] = state.muteArray[ch] === 1 ? 0 : 1;
-  socket.send(JSON.stringify({ type: "mute", channel: ch, value: state.muteArray[ch] }));
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "mute", channel: ch, value: state.muteArray[ch] }));
+  }
   renderMuteStrip();
+  showStatus(`CH${ch + 1} ${state.muteArray[ch] ? 'unmuted' : 'muted'}`, 'success');
 }
 
 // Set channel directly
@@ -226,12 +340,26 @@ function changeChannel(dir) {
 function changeTempo(delta) {
   state.bpm = Math.max(1, Math.min(400, state.bpm + delta));
   elements.bpmDisplay.textContent = state.bpm;
-  socket.send(JSON.stringify({ type: "bpm", bpm: state.bpm }));
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "bpm", bpm: state.bpm }));
+  }
+  
+  // Update demo tempo
+  if (demoInterval) {
+    clearInterval(demoInterval);
+    demoInterval = setInterval(() => {
+      state.currentStep = (state.currentStep + 1) % 8;
+      renderGrid();
+      renderStepIndicator();
+    }, (60000 / state.bpm) / 4);
+  }
 }
 
 // Send navigation via WebSocket
 function sendNavigation(type, direction) {
-  socket.send(JSON.stringify({ type: "updownPressed", segment: type, direction }));
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "updownPressed", segment: type, direction }));
+  }
 }
 
 // Handle keyboard
@@ -277,6 +405,15 @@ function handleDataReceived(data) {
     case 'bpm':
       state.bpm = data.bpm;
       updateDisplays();
+      // Update demo tempo
+      if (demoInterval) {
+        clearInterval(demoInterval);
+        demoInterval = setInterval(() => {
+          state.currentStep = (state.currentStep + 1) % 8;
+          renderGrid();
+          renderStepIndicator();
+        }, (60000 / state.bpm) / 4);
+      }
       break;
       
     case 'mute':
