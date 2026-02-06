@@ -17,8 +17,30 @@
   
   <!-- Theme Switcher -->
   <script src="/js/theme-switcher.js" defer></script>
+  
+  <style>
+    .status-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0,0,0,0.8);
+      color: #64c8ff;
+      padding: 8px 16px;
+      font-size: 14px;
+      z-index: 1000;
+      text-align: center;
+    }
+    .status-bar.demo {
+      background: rgba(255, 165, 0, 0.9);
+      color: #000;
+    }
+  </style>
 </head>
 <body>
+  <!-- Status Bar -->
+  <div id="statusBar" class="status-bar demo">🎮 Demo Mode - Connect to device for live control</div>
+
   <!-- Top Bar -->
   <div id="topBar">
     <button class="view-button active" id="btn-vertical" onclick="switchView('vertical')">SEQ</button>
@@ -167,15 +189,156 @@
   
   <!-- Page-specific initialization -->
   <script>
-    // Initialize the grid on page load
+    // DEMO MODE INITIALIZATION
+    const DEMO_MODE = true;
+    
+    let caveArray = [];
+    let activeGroup = 0;
+    let activePreset = 0;
+    let activeChannel = 0;
+    let currentStep = 0;
+    let bpm = 120;
+    let demoInterval = null;
+
+    function generateDemoData() {
+      const demo = [];
+      for (let g = 0; g < 8; g++) {
+        const presets = [];
+        for (let p = 0; p < 8; p++) {
+          const rows = [];
+          for (let ch = 0; ch < 8; ch++) {
+            const steps = [];
+            for (let s = 0; s < 8; s++) {
+              const val = (g + p + ch + s) % 3;
+              steps.push(val === 2 ? 0 : val);
+            }
+            rows.push(steps);
+          }
+          presets.push(rows);
+        }
+        demo.push(presets);
+      }
+      return demo;
+    }
+
+    function startDemoMode() {
+      caveArray = generateDemoData();
+      console.log('Demo mode started');
+      updateStepsGrid(activeGroup, activePreset, activeChannel);
+      updateDisplays();
+      startStepAnimation();
+    }
+
+    function updateDisplays() {
+      const gd = document.getElementById('groupDisplay');
+      const pd = document.getElementById('presetDisplay');
+      const cd = document.getElementById('channelDisplay');
+      if (gd) gd.textContent = activeGroup + 1;
+      if (pd) pd.textContent = activePreset + 1;
+      if (cd) cd.textContent = activeChannel + 1;
+    }
+
+    function updateStepsGrid(group, preset, channel) {
+      const sequencer = document.getElementById('sequencer');
+      if (!sequencer || !caveArray.length) return;
+      
+      let html = '';
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const val = caveArray[group][preset][row][col] || 0;
+          const isPlaying = col === currentStep;
+          const classes = ['button'];
+          if (val === 1) classes.push('active');
+          else if (val === 9) classes.push('always-active');
+          if (isPlaying) classes.push('playing');
+          html += `<div class="${classes.join(' ')}" data-row="${row}" data-col="${col}" onclick="toggleCell(${row}, ${col})"></div>`;
+        }
+      }
+      sequencer.innerHTML = html;
+    }
+
+    function toggleCell(row, col) {
+      if (!caveArray.length) return;
+      caveArray[activeGroup][activePreset][row][col] = 
+        (caveArray[activeGroup][activePreset][row][col] + 1) % 3;
+      updateStepsGrid(activeGroup, activePreset, activeChannel);
+      showStatus(`Cell ${row + 1}:${col + 1} set to ${caveArray[activeGroup][activePreset][row][col]}`);
+    }
+
+    function changeGroup(dir) {
+      activeGroup = (activeGroup + dir + 8) % 8;
+      updateDisplays();
+      updateStepsGrid(activeGroup, activePreset, activeChannel);
+    }
+
+    function changePreset(dir) {
+      activePreset = (activePreset + dir + 8) % 8;
+      updateDisplays();
+      updateStepsGrid(activeGroup, activePreset, activeChannel);
+    }
+
+    function changeChannel(dir) {
+      activeChannel = (activeChannel + dir + 8) % 8;
+      updateDisplays();
+      updateStepsGrid(activeGroup, activePreset, activeChannel);
+    }
+
+    function changeTempo(dir) {
+      bpm = Math.max(1, Math.min(400, bpm + (dir === 'up' ? 5 : -5)));
+      const bd = document.getElementById('bpmDisplay');
+      const bi = document.getElementById('bpmInput');
+      if (bd) bd.textContent = bpm;
+      if (bi) bi.value = bpm;
+      
+      if (demoInterval) {
+        clearInterval(demoInterval);
+        demoInterval = setInterval(() => {
+          currentStep = (currentStep + 1) % 8;
+          updateStepsGrid(activeGroup, activePreset, activeChannel);
+        }, (60000 / bpm) / 4);
+      }
+      showStatus(`BPM: ${bpm}`);
+    }
+
+    function startStepAnimation() {
+      if (demoInterval) clearInterval(demoInterval);
+      demoInterval = setInterval(() => {
+        currentStep = (currentStep + 1) % 8;
+        updateStepsGrid(activeGroup, activePreset, activeChannel);
+      }, (60000 / bpm) / 4);
+    }
+
+    function showStatus(msg) {
+      const sb = document.getElementById('statusBar');
+      if (sb) {
+        sb.textContent = msg;
+        setTimeout(() => {
+          sb.textContent = '🎮 Demo Mode - Connect to device for live control';
+        }, 2000);
+      }
+    }
+
+    function openSettings() {
+      window.location.href = '/config.html';
+    }
+
+    function openSaveModal() { showStatus('Save modal (demo)'); }
+    function openLoadModal() { showStatus('Load modal (demo)'); }
+    function closeModal() {}
+
+    function switchView(view) {
+      document.querySelectorAll('.view-button').forEach(b => b.classList.remove('active'));
+      document.getElementById('btn-' + view)?.classList.add('active');
+      showStatus('Switched to ' + view + ' view');
+    }
+
+    // Initialize on load
     document.addEventListener('DOMContentLoaded', function() {
-      console.log('Cavian2 UI initialized');
+      console.log('Cavian2 UI initializing (demo mode)');
       
       // Generate vertical grid buttons
       const sequencer = document.getElementById('sequencer');
       let html = '';
-      
-      // Generate 8x8 grid
       for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
           html += `<div class="button" data-row="${row}" data-col="${col}"></div>`;
@@ -183,8 +346,8 @@
       }
       sequencer.innerHTML = html;
       
-      // Initialize display values
       updateDisplays();
+      startDemoMode();
     });
   </script>
 </body>
