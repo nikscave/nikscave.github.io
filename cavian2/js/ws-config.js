@@ -27,4 +27,18 @@ const CAVIAN_WS_URL = getWebSocketURL();
 // Make available globally
 window.CAVIAN_WS_URL = CAVIAN_WS_URL;
 
+// Helper function to send to ESP32 safely
+function sendToESP32(data) {
+  if (typeof socket !== 'undefined' && socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(data));
+    return true;
+  }
+  return false;
+}
+
+// Helper to check if connected to ESP32
+function isConnectedToESP32() {
+  return typeof socket !== 'undefined' && socket && socket.readyState === WebSocket.OPEN;
+}
+
 console.log('WebSocket URL:', CAVIAN_WS_URL);
