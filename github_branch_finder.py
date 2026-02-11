@@ -8,7 +8,11 @@ and identifies the parent branch each diverged from.
 import csv
 import requests
 import sys
+import urllib3
 from typing import Dict, List, Optional, Tuple
+
+# Disable SSL warnings (for corporate proxies with self-signed certs)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # CONFIGURATION
 GITHUB_TOKEN = "YOUR_GITHUB_PAT_TOKEN_HERE"
@@ -20,7 +24,7 @@ API_BASE = "https://api.github.com"
 
 # Headers for GitHub API requests
 HEADERS = {
-    "Authorization": f"token {GITHUB_TOKEN}",
+    "Authorization": f"Bearer {GITHUB_TOKEN}",
     "Accept": "application/vnd.github.v3+json"
 }
 
@@ -39,7 +43,7 @@ def get_branches_where_head(repo: str, sha: str) -> List[str]:
     url = f"{API_BASE}/repos/{repo}/commits/{sha}/branches-where-head"
     
     try:
-        response = requests.get(url, headers=HEADERS)
+        response = requests.get(url, headers=HEADERS, verify=False)
         response.raise_for_status()
         branches = response.json()
         return [branch['name'] for branch in branches]
@@ -64,7 +68,7 @@ def get_all_branches(repo: str) -> List[Dict]:
     try:
         # Handle pagination
         while url:
-            response = requests.get(url, headers=HEADERS, params={"per_page": 100})
+            response = requests.get(url, headers=HEADERS, params={"per_page": 100}, verify=False)
             response.raise_for_status()
             branches.extend(response.json())
             
@@ -127,9 +131,10 @@ def find_divergence_point(repo: str, current_sha: str, current_branches: List[st
     Find the branch/commit that the current SHA diverged from.
     
     Strategy:
-    1. Get commit's parent SHA(s)
-    2. Find which major branches contain the parent
-    3. Return the most likely parent branch
+    1. Walk back the commit history from current_sha
+    2. Find the first merge commit (2 parents)
+    3. The second parent is the branch that was merged (divergence point)
+    4. Find which branch contains that parent SHA
     
     Args:
         repo: Repository in format "owner/repo"
@@ -139,64 +144,112 @@ def find_divergence_point(repo: str, current_sha: str, current_branches: List[st
     Returns:
         Tuple of (branch_name, sha) or (None, parent_sha)
     """
-    # Get commit details to find parent(s)
-    commit_info = get_commit_info(repo, current_sha)
-    if not commit_info:
-        return None, None
+    print(f"    Walking commit history to find merge point...")
     
-    parents = commit_info.get('parents', [])
-    if not parents:
-        # No parents means this is the initial commit
-        return None, None
+    # Walk back up to 50 commits to find a merge
+    current = current_sha
+    for i in range(50):
+        commit_info = get_commit_info(repo, current)
+        if not commit_info:
+            return None, None
+        
+        parents = commit_info.get('parents', [])
+        
+        if len(parents) == 0:
+            # Initial commit, no parent
+            print(f"    Reached initial commit")
+            return None, None
+        
+        elif len(parents) == 2:
+            # Merge commit! Second parent is the merged branch
+            parent_0_sha = parents[0]['sha']  # Branch merged INTO
+            parent_1_sha = parents[1]['sha']  # Branch merged FROM (divergence!)
+            
+            print(f"    Found merge commit at {current[:7]}")
+            print(f"    Parent 0 (merged into): {parent_0_sha[:7]}")
+            print(f"    Parent 1 (merged from): {parent_1_sha[:7]}")
+            
+            # Find which branch contains parent_1 (the source branch)
+            branch_name = find_branch_containing_commit(repo, parent_1_sha, current_branches)
+            
+            if branch_name:
+                return branch_name, parent_1_sha
+            else:
+                return None, parent_1_sha
+        
+        elif len(parents) == 1:
+            # Regular commit, keep walking back
+            current = parents[0]['sha']
+        
+        else:
+            # Octopus merge (3+ parents) - rare, use second parent
+            parent_1_sha = parents[1]['sha']
+            branch_name = find_branch_containing_commit(repo, parent_1_sha, current_branches)
+            return branch_name, parent_1_sha
     
-    # Get the first parent (main line of development)
-    parent_sha = parents[0]['sha']
+    print(f"    No merge commit found in last 50 commits")
+    return None, None
+
+
+def find_branch_containing_commit(repo: str, sha: str, exclude_branches: List[str]) -> Optional[str]:
+    """
+    Find which branch contains a given commit SHA.
     
-    # Get all branches to check which contain the parent
+    Args:
+        repo: Repository in format "owner/repo"
+        sha: Commit SHA to find
+        exclude_branches: Branch names to exclude from search
+    
+    Returns:
+        Branch name or None
+    """
+    # Priority branches to check first
+    priority_branches = ['main', 'master', 'develop', 'development', 'staging', 'production', 'release']
+    
+    # Get all branches
     all_branches = get_all_branches(repo)
     if not all_branches:
-        return None, parent_sha
+        return None
     
-    # Common parent branch patterns to prioritize
-    priority_branches = ['main', 'master', 'develop', 'development', 'staging', 'production']
+    # Check priority branches first
+    for priority in priority_branches:
+        for branch in all_branches:
+            if branch['name'] == priority and branch['name'] not in exclude_branches:
+                # Check if this branch contains the SHA
+                if branch_contains_commit(repo, branch['name'], sha):
+                    return branch['name']
     
-    # Find branches that contain the parent SHA but not in current_branches
-    candidate_branches = []
-    
+    # Check all other branches
     for branch in all_branches:
         branch_name = branch['name']
-        
-        # Skip if this is one of the current branches
-        if branch_name in current_branches:
-            continue
-        
-        # Compare the branch with our current SHA to see if parent is in that branch
-        comparison = compare_commits(repo, branch_name, current_sha)
-        if not comparison:
-            continue
-        
-        # If ahead_by > 0, it means current_sha has commits not in branch_name
-        # If behind_by >= 0, it means branch_name has commits leading to current_sha
-        # We want branches where the parent is an ancestor
-        
-        # Check if this branch contains the parent
-        # We do this by seeing if merge_base_commit matches or is close to parent
-        if comparison.get('merge_base_commit', {}).get('sha') == parent_sha:
-            candidate_branches.append(branch_name)
-        elif comparison.get('status') == 'diverged' and comparison.get('behind_by', 0) > 0:
-            candidate_branches.append(branch_name)
+        if branch_name not in exclude_branches and branch_name not in priority_branches:
+            if branch_contains_commit(repo, branch_name, sha):
+                return branch_name
     
-    # Prioritize common branch names
-    for priority_branch in priority_branches:
-        if priority_branch in candidate_branches:
-            return priority_branch, parent_sha
+    return None
+
+
+def branch_contains_commit(repo: str, branch: str, sha: str) -> bool:
+    """
+    Check if a branch contains a specific commit.
     
-    # Return the first candidate if any
-    if candidate_branches:
-        return candidate_branches[0], parent_sha
+    Args:
+        repo: Repository in format "owner/repo"
+        branch: Branch name
+        sha: Commit SHA
     
-    # If no branch found, just return the parent SHA
-    return None, parent_sha
+    Returns:
+        True if branch contains the commit
+    """
+    # Use compare API: if sha is an ancestor of branch, merge_base will be sha
+    comparison = compare_commits(repo, sha, branch)
+    if not comparison:
+        return False
+    
+    merge_base = comparison.get('merge_base_commit', {}).get('sha', '')
+    
+    # If merge base equals our SHA, then SHA is an ancestor of branch
+    return merge_base == sha
 
 
 def process_csv(input_file: str, output_file: str):
@@ -234,9 +287,9 @@ def process_csv(input_file: str, output_file: str):
         diverged_branch, diverged_sha = find_divergence_point(repo, sha, branches_at_head)
         
         if diverged_branch:
-            diverged_from = f"{diverged_branch} ({diverged_sha[:7]})"
+            diverged_from = f"{diverged_branch} ({diverged_sha})"
         elif diverged_sha:
-            diverged_from = diverged_sha[:7]
+            diverged_from = diverged_sha
         else:
             diverged_from = "Unknown"
         
