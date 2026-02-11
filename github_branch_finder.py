@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
-GitHub Branch Ancestry Finder
-Reads a CSV of repos and commit SHAs, finds which branches contain them
-and identifies the parent branch each diverged from.
+GitHub Branch Ancestry Finder - Simplified
+Walks commit history until finding a merge commit (2 parents).
+Returns the second parent SHA (the branch that was merged from).
 """
 
 import csv
 import requests
 import sys
 import urllib3
-from typing import Dict, List, Optional, Tuple
 
 # Disable SSL warnings (for corporate proxies with self-signed certs)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -29,232 +28,73 @@ HEADERS = {
 }
 
 
-def get_branches_where_head(repo: str, sha: str) -> List[str]:
+def get_commit_parents(repo: str, sha: str) -> list:
     """
-    Find all branches where the given SHA is the HEAD commit.
+    Get parent commit SHAs for a given commit.
     
     Args:
         repo: Repository in format "owner/repo"
         sha: Commit SHA
     
     Returns:
-        List of branch names
-    """
-    url = f"{API_BASE}/repos/{repo}/commits/{sha}/branches-where-head"
-    
-    try:
-        response = requests.get(url, headers=HEADERS, verify=False)
-        response.raise_for_status()
-        branches = response.json()
-        return [branch['name'] for branch in branches]
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching branches for {repo}/{sha}: {e}")
-        return []
-
-
-def get_all_branches(repo: str) -> List[Dict]:
-    """
-    Get all branches in a repository.
-    
-    Args:
-        repo: Repository in format "owner/repo"
-    
-    Returns:
-        List of branch objects with name and commit info
-    """
-    url = f"{API_BASE}/repos/{repo}/branches"
-    branches = []
-    
-    try:
-        # Handle pagination
-        while url:
-            response = requests.get(url, headers=HEADERS, params={"per_page": 100}, verify=False)
-            response.raise_for_status()
-            branches.extend(response.json())
-            
-            # Check for next page
-            url = response.links.get('next', {}).get('url')
-        
-        return branches
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching branches for {repo}: {e}")
-        return []
-
-
-def get_commit_info(repo: str, sha: str) -> Optional[Dict]:
-    """
-    Get detailed information about a commit.
-    
-    Args:
-        repo: Repository in format "owner/repo"
-        sha: Commit SHA
-    
-    Returns:
-        Commit information dict or None
+        List of parent SHAs (empty if no parents, 1 for regular commit, 2+ for merge)
     """
     url = f"{API_BASE}/repos/{repo}/commits/{sha}"
     
     try:
-        response = requests.get(url, headers=HEADERS)
+        response = requests.get(url, headers=HEADERS, verify=False)
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching commit {repo}/{sha}: {e}")
-        return None
-
-
-def compare_commits(repo: str, base: str, head: str) -> Optional[Dict]:
-    """
-    Compare two commits to find their relationship.
-    
-    Args:
-        repo: Repository in format "owner/repo"
-        base: Base commit/branch
-        head: Head commit/branch
-    
-    Returns:
-        Comparison information or None
-    """
-    url = f"{API_BASE}/repos/{repo}/compare/{base}...{head}"
-    
-    try:
-        response = requests.get(url, headers=HEADERS)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Error comparing {base}...{head} in {repo}: {e}")
-        return None
-
-
-def find_divergence_point(repo: str, current_sha: str, current_branches: List[str]) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Find the branch/commit that the current SHA diverged from.
-    
-    Strategy:
-    1. Walk back the commit history from current_sha
-    2. Find the first merge commit (2 parents)
-    3. The second parent is the branch that was merged (divergence point)
-    4. Find which branch contains that parent SHA
-    
-    Args:
-        repo: Repository in format "owner/repo"
-        current_sha: The commit SHA we're analyzing
-        current_branches: Branches where current_sha is HEAD
-    
-    Returns:
-        Tuple of (branch_name, sha) or (None, parent_sha)
-    """
-    print(f"    Walking commit history to find merge point...")
-    
-    # Walk back up to 50 commits to find a merge
-    current = current_sha
-    for i in range(50):
-        commit_info = get_commit_info(repo, current)
-        if not commit_info:
-            return None, None
-        
+        commit_info = response.json()
         parents = commit_info.get('parents', [])
+        return [p['sha'] for p in parents]
+    except requests.exceptions.RequestException as e:
+        print(f"  ERROR: Failed to get commit {sha[:7]}: {e}")
+        return []
+
+
+def find_merge_parent(repo: str, start_sha: str, max_depth: int = 100) -> str:
+    """
+    Walk back commit history until finding a merge commit (2 parents).
+    Return the second parent SHA (the branch merged from).
+    
+    Args:
+        repo: Repository in format "owner/repo"
+        start_sha: Starting commit SHA
+        max_depth: Maximum commits to walk back
+    
+    Returns:
+        SHA of the parent branch, or "Not found" if no merge in depth limit
+    """
+    current_sha = start_sha
+    
+    for i in range(max_depth):
+        print(f"  Step {i+1}: Checking {current_sha[:7]}...")
+        
+        parents = get_commit_parents(repo, current_sha)
         
         if len(parents) == 0:
-            # Initial commit, no parent
-            print(f"    Reached initial commit")
-            return None, None
-        
-        elif len(parents) == 2:
-            # Merge commit! Second parent is the merged branch
-            parent_0_sha = parents[0]['sha']  # Branch merged INTO
-            parent_1_sha = parents[1]['sha']  # Branch merged FROM (divergence!)
-            
-            print(f"    Found merge commit at {current[:7]}")
-            print(f"    Parent 0 (merged into): {parent_0_sha[:7]}")
-            print(f"    Parent 1 (merged from): {parent_1_sha[:7]}")
-            
-            # Find which branch contains parent_1 (the source branch)
-            branch_name = find_branch_containing_commit(repo, parent_1_sha, current_branches)
-            
-            if branch_name:
-                return branch_name, parent_1_sha
-            else:
-                return None, parent_1_sha
+            print(f"  -> Initial commit (no parents)")
+            return "Initial commit"
         
         elif len(parents) == 1:
-            # Regular commit, keep walking back
-            current = parents[0]['sha']
+            # Regular commit, continue walking
+            print(f"  -> 1 parent: {parents[0][:7]}, continuing...")
+            current_sha = parents[0]
         
-        else:
-            # Octopus merge (3+ parents) - rare, use second parent
-            parent_1_sha = parents[1]['sha']
-            branch_name = find_branch_containing_commit(repo, parent_1_sha, current_branches)
-            return branch_name, parent_1_sha
+        elif len(parents) >= 2:
+            # Merge commit found!
+            print(f"  -> MERGE COMMIT FOUND!")
+            print(f"  -> Parent 0 (merged into): {parents[0][:7]}")
+            print(f"  -> Parent 1 (merged from): {parents[1][:7]}")
+            return parents[1]  # Return the branch that was merged FROM
     
-    print(f"    No merge commit found in last 50 commits")
-    return None, None
-
-
-def find_branch_containing_commit(repo: str, sha: str, exclude_branches: List[str]) -> Optional[str]:
-    """
-    Find which branch contains a given commit SHA.
-    
-    Args:
-        repo: Repository in format "owner/repo"
-        sha: Commit SHA to find
-        exclude_branches: Branch names to exclude from search
-    
-    Returns:
-        Branch name or None
-    """
-    # Priority branches to check first
-    priority_branches = ['main', 'master', 'develop', 'development', 'staging', 'production', 'release']
-    
-    # Get all branches
-    all_branches = get_all_branches(repo)
-    if not all_branches:
-        return None
-    
-    # Check priority branches first
-    for priority in priority_branches:
-        for branch in all_branches:
-            if branch['name'] == priority and branch['name'] not in exclude_branches:
-                # Check if this branch contains the SHA
-                if branch_contains_commit(repo, branch['name'], sha):
-                    return branch['name']
-    
-    # Check all other branches
-    for branch in all_branches:
-        branch_name = branch['name']
-        if branch_name not in exclude_branches and branch_name not in priority_branches:
-            if branch_contains_commit(repo, branch_name, sha):
-                return branch_name
-    
-    return None
-
-
-def branch_contains_commit(repo: str, branch: str, sha: str) -> bool:
-    """
-    Check if a branch contains a specific commit.
-    
-    Args:
-        repo: Repository in format "owner/repo"
-        branch: Branch name
-        sha: Commit SHA
-    
-    Returns:
-        True if branch contains the commit
-    """
-    # Use compare API: if sha is an ancestor of branch, merge_base will be sha
-    comparison = compare_commits(repo, sha, branch)
-    if not comparison:
-        return False
-    
-    merge_base = comparison.get('merge_base_commit', {}).get('sha', '')
-    
-    # If merge base equals our SHA, then SHA is an ancestor of branch
-    return merge_base == sha
+    print(f"  -> No merge found in {max_depth} commits")
+    return "Not found"
 
 
 def process_csv(input_file: str, output_file: str):
     """
-    Process the input CSV and generate output with branch ancestry info.
+    Process the input CSV and generate output with parent branch SHA.
     
     Args:
         input_file: Path to input CSV
@@ -268,44 +108,32 @@ def process_csv(input_file: str, output_file: str):
             reader = csv.DictReader(f)
             rows = list(reader)
     except FileNotFoundError:
-        print(f"Error: {input_file} not found!")
+        print(f"ERROR: {input_file} not found!")
         sys.exit(1)
+    
+    print(f"\nProcessing {len(rows)} commits...\n")
     
     # Process each row
     for i, row in enumerate(rows, 1):
         repo = row.get('repo', '').strip()
         sha = row.get('SHA', '').strip()
-        provided_branch = row.get('current branch name', '').strip()
         
-        print(f"Processing {i}/{len(rows)}: {repo} @ {sha}")
+        print(f"[{i}/{len(rows)}] {repo} @ {sha[:7]}")
         
-        # Find branches where this SHA is HEAD
-        branches_at_head = get_branches_where_head(repo, sha)
-        branches_str = ','.join(branches_at_head) if branches_at_head else 'Not found at any branch HEAD'
-        
-        # Find divergence point
-        diverged_branch, diverged_sha = find_divergence_point(repo, sha, branches_at_head)
-        
-        if diverged_branch:
-            diverged_from = f"{diverged_branch} ({diverged_sha})"
-        elif diverged_sha:
-            diverged_from = diverged_sha
-        else:
-            diverged_from = "Unknown"
+        # Find the parent branch SHA
+        parent_sha = find_merge_parent(repo, sha)
         
         results.append({
             'repo': repo,
             'current_SHA': sha,
-            'branches_at_head': branches_str,
-            'diverged_from': diverged_from
+            'parent_branch_SHA': parent_sha
         })
         
-        print(f"  -> Branches at HEAD: {branches_str}")
-        print(f"  -> Diverged from: {diverged_from}\n")
+        print(f"  RESULT: {parent_sha}\n")
     
     # Write output CSV
     with open(output_file, 'w', newline='') as f:
-        fieldnames = ['repo', 'current_SHA', 'branches_at_head', 'diverged_from']
+        fieldnames = ['repo', 'current_SHA', 'parent_branch_SHA']
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(results)
@@ -316,16 +144,16 @@ def process_csv(input_file: str, output_file: str):
 def main():
     """Main entry point."""
     if GITHUB_TOKEN == "YOUR_GITHUB_PAT_TOKEN_HERE":
-        print("Error: Please set your GitHub Personal Access Token in the script!")
+        print("ERROR: Please set your GitHub Personal Access Token in the script!")
         print("Edit GITHUB_TOKEN at the top of the script.")
         sys.exit(1)
     
-    print("GitHub Branch Ancestry Finder")
-    print("=" * 50)
-    print(f"Input file: {INPUT_CSV}")
-    print(f"Output file: {OUTPUT_CSV}")
-    print("=" * 50)
-    print()
+    print("=" * 60)
+    print("GitHub Parent Branch Finder (Simplified)")
+    print("=" * 60)
+    print(f"Input:  {INPUT_CSV}")
+    print(f"Output: {OUTPUT_CSV}")
+    print("=" * 60)
     
     process_csv(INPUT_CSV, OUTPUT_CSV)
 
