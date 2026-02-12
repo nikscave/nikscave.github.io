@@ -51,17 +51,114 @@ def get_commit_info(repo: str, sha: str) -> dict:
         return None
 
 
-def walk_commit_history(repo: str, start_sha: str) -> list:
+def get_all_branches(repo: str) -> dict:
+    """
+    Get all branches in a repository and cache them.
+    
+    Args:
+        repo: Repository in format "owner/repo"
+    
+    Returns:
+        Dict mapping branch names to their HEAD commit SHAs
+    """
+    url = f"{API_BASE}/repos/{repo}/branches"
+    branches = {}
+    
+    try:
+        print(f"  Fetching all branches for {repo}...")
+        # Handle pagination
+        while url:
+            response = requests.get(url, headers=HEADERS, params={"per_page": 100}, verify=False)
+            response.raise_for_status()
+            branch_list = response.json()
+            
+            for branch in branch_list:
+                branches[branch['name']] = branch['commit']['sha']
+            
+            # Check for next page
+            url = response.links.get('next', {}).get('url')
+        
+        print(f"  -> Found {len(branches)} branches")
+        return branches
+    except requests.exceptions.RequestException as e:
+        print(f"  ERROR: Failed to get branches for {repo}: {e}")
+        return {}
+
+
+def find_branch_for_sha(repo: str, sha: str, branches: dict) -> str:
+    """
+    Find which branch(es) contain a specific SHA.
+    
+    Args:
+        repo: Repository in format "owner/repo"
+        sha: Commit SHA to find
+        branches: Dict of branch_name -> head_sha from get_all_branches
+    
+    Returns:
+        Branch name or comma-separated list of branches, or SHA if not found
+    """
+    # First check if SHA is HEAD of any branch
+    matching_branches = [name for name, head_sha in branches.items() if head_sha == sha]
+    if matching_branches:
+        return ','.join(matching_branches)
+    
+    # Priority branches to check first
+    priority_branches = ['main', 'master', 'develop', 'development', 'staging', 'production', 'release']
+    
+    # Check priority branches first to see if they contain this SHA
+    for branch_name in priority_branches:
+        if branch_name in branches:
+            if sha_in_branch(repo, branch_name, sha):
+                return branch_name
+    
+    # Check other branches
+    for branch_name in branches.keys():
+        if branch_name not in priority_branches:
+            if sha_in_branch(repo, branch_name, sha):
+                return branch_name
+    
+    # Not found in any branch, return the SHA
+    return sha[:7]
+
+
+def sha_in_branch(repo: str, branch: str, sha: str) -> bool:
+    """
+    Check if a SHA is an ancestor of a branch (i.e., the branch contains this commit).
+    
+    Args:
+        repo: Repository in format "owner/repo"
+        branch: Branch name
+        sha: Commit SHA
+    
+    Returns:
+        True if branch contains the SHA
+    """
+    url = f"{API_BASE}/repos/{repo}/compare/{sha}...{branch}"
+    
+    try:
+        response = requests.get(url, headers=HEADERS, verify=False)
+        response.raise_for_status()
+        comparison = response.json()
+        
+        # If merge_base equals our SHA, then SHA is an ancestor of branch
+        merge_base = comparison.get('merge_base_commit', {}).get('sha', '')
+        return merge_base == sha
+    except requests.exceptions.RequestException:
+        return False
+
+
+def walk_commit_history(repo: str, start_sha: str, branches: dict) -> list:
     """
     Walk the complete commit history from start_sha back to the beginning.
-    Captures ALL commits, marking merge commits and deviations.
+    Captures ALL commits, marking merge commits and identifying branch names for merge parents.
     
     Args:
         repo: Repository in format "owner/repo"
         start_sha: Starting commit SHA
+        branches: Dict of branch_name -> head_sha from get_all_branches
     
     Returns:
-        List of dicts with commit info: {sha, parent_count, is_merge, message}
+        List of dicts with commit info: {sha, parent_count, is_merge, message, merge_from_branch}
     """
     history = []
     visited = set()  # Prevent infinite loops
@@ -94,7 +191,14 @@ def walk_commit_history(repo: str, start_sha: str) -> list:
         
         # Determine commit type
         is_merge = parent_count >= 2
-        commit_type = "MERGE" if is_merge else "regular"
+        merge_from_branch = None
+        
+        # For merge commits, identify the branch that was merged FROM (parent 1)
+        if is_merge and len(parents) >= 2:
+            merge_parent_sha = parents[1]['sha']
+            print(f"    Finding branch for merge parent {merge_parent_sha[:7]}...")
+            merge_from_branch = find_branch_for_sha(repo, merge_parent_sha, branches)
+            print(f"    -> Merged from: {merge_from_branch}")
         
         # Record this commit
         history.append({
@@ -102,7 +206,8 @@ def walk_commit_history(repo: str, start_sha: str) -> list:
             'parent_count': parent_count,
             'is_merge': is_merge,
             'message': message,
-            'parents': [p['sha'] for p in parents]
+            'parents': [p['sha'] for p in parents],
+            'merge_from_branch': merge_from_branch
         })
         
         # Add all parents to queue (follow the full history tree)
@@ -117,21 +222,23 @@ def walk_commit_history(repo: str, start_sha: str) -> list:
 
 def format_history_path(history: list, use_short: bool = True) -> str:
     """
-    Format commit history as a readable path string.
+    Format commit history as a readable path string with branch names for merges.
     
     Args:
         history: List of commit dicts from walk_commit_history
         use_short: If True, use 7-char SHAs, otherwise full SHAs
     
     Returns:
-        Formatted string like "abc123 -> def456 (MERGE: 2 parents) -> ghi789"
+        Formatted string like "abc123 -> def456 (MERGE from: feature-branch) -> ghi789"
     """
     path_parts = []
     
     for commit in history:
         sha = commit['sha'][:7] if use_short else commit['sha']
         
-        if commit['is_merge']:
+        if commit['is_merge'] and commit.get('merge_from_branch'):
+            part = f"{sha} (MERGE from: {commit['merge_from_branch']})"
+        elif commit['is_merge']:
             part = f"{sha} (MERGE: {commit['parent_count']} parents)"
         else:
             part = sha
@@ -164,6 +271,9 @@ def process_csv(input_file: str, output_short: str, output_full: str):
     
     print(f"\nProcessing {len(rows)} commits...\n")
     
+    # Cache branches per repo to avoid repeated API calls
+    repo_branches_cache = {}
+    
     # Process each row
     for i, row in enumerate(rows, 1):
         repo = row.get('repo', '').strip()
@@ -171,8 +281,14 @@ def process_csv(input_file: str, output_short: str, output_full: str):
         
         print(f"[{i}/{len(rows)}] {repo} @ {sha[:7]}")
         
+        # Get branches for this repo (cached)
+        if repo not in repo_branches_cache:
+            repo_branches_cache[repo] = get_all_branches(repo)
+        
+        branches = repo_branches_cache[repo]
+        
         # Walk the complete history
-        history = walk_commit_history(repo, sha)
+        history = walk_commit_history(repo, sha, branches)
         
         if not history:
             print(f"  WARNING: No history found\n")
