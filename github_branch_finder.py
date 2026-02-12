@@ -88,6 +88,7 @@ def get_all_branches(repo: str) -> dict:
 def find_branch_for_sha(repo: str, sha: str, branches: dict) -> str:
     """
     Find which branch(es) contain a specific SHA.
+    Prioritizes finding branches where SHA is the HEAD.
     
     Args:
         repo: Repository in format "owner/repo"
@@ -97,27 +98,26 @@ def find_branch_for_sha(repo: str, sha: str, branches: dict) -> str:
     Returns:
         Branch name or comma-separated list of branches, or SHA if not found
     """
-    # First check if SHA is HEAD of any branch
+    # First check if SHA is HEAD of any branch - this is fast and most accurate
     matching_branches = [name for name, head_sha in branches.items() if head_sha == sha]
     if matching_branches:
-        return ','.join(matching_branches)
+        # Prioritize returning common branch names if multiple matches
+        priority = ['main', 'master', 'develop', 'development', 'staging', 'production', 'release']
+        for p in priority:
+            if p in matching_branches:
+                return p
+        return matching_branches[0]
     
-    # Priority branches to check first
+    # SHA is not HEAD of any branch - it's somewhere in history
+    # Only check priority branches to avoid excessive API calls
     priority_branches = ['main', 'master', 'develop', 'development', 'staging', 'production', 'release']
     
-    # Check priority branches first to see if they contain this SHA
     for branch_name in priority_branches:
         if branch_name in branches:
             if sha_in_branch(repo, branch_name, sha):
                 return branch_name
     
-    # Check other branches
-    for branch_name in branches.keys():
-        if branch_name not in priority_branches:
-            if sha_in_branch(repo, branch_name, sha):
-                return branch_name
-    
-    # Not found in any branch, return the SHA
+    # Not found in priority branches - return short SHA
     return sha[:7]
 
 
@@ -140,9 +140,26 @@ def sha_in_branch(repo: str, branch: str, sha: str) -> bool:
         response.raise_for_status()
         comparison = response.json()
         
-        # If merge_base equals our SHA, then SHA is an ancestor of branch
+        # If status is 'behind', branch is behind sha (sha is NOT in branch)
+        # If status is 'ahead', branch is ahead of sha (sha IS in branch's history)
+        # If status is 'identical', they're the same
+        # If status is 'diverged', they diverged (sha might or might not be in branch)
+        
+        status = comparison.get('status', '')
         merge_base = comparison.get('merge_base_commit', {}).get('sha', '')
-        return merge_base == sha
+        
+        # SHA is in branch if merge_base equals SHA (SHA is an ancestor)
+        # AND status is not 'behind' (which would mean branch doesn't contain SHA)
+        if status == 'identical':
+            return True
+        elif status == 'ahead' and merge_base == sha:
+            return True
+        elif status == 'diverged':
+            # For diverged, check if merge base is the SHA we're looking for
+            return merge_base == sha
+        
+        return False
+        
     except requests.exceptions.RequestException:
         return False
 
